@@ -1,0 +1,181 @@
+/**
+ * AI layer — calls the Lovable AI Gateway Responses API to turn natural
+ * language into a structured, executable phone-automation plan.
+ *
+ * Server-only. Never import from browser code.
+ */
+import {
+  DECIDER_SYSTEM_PROMPT,
+  DECIDE_JSON_SCHEMA,
+  PLANNER_SYSTEM_PROMPT,
+  PLAN_JSON_SCHEMA,
+  type AgentPlan,
+  type DecideResult,
+  type ScreenSnapshot,
+} from "./agent-protocol";
+
+const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/responses";
+const MODEL = "openai/gpt-6-astra";
+
+export class GatewayError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+interface CallOptions {
+  system: string;
+  input: string;
+  schemaName: string;
+  schema: unknown;
+  runId?: string | null;
+  signal?: AbortSignal;
+}
+
+async function callGateway({
+  system,
+  input,
+  schemaName,
+  schema,
+  runId,
+  signal,
+}: CallOptions): Promise<unknown> {
+  const apiKey = process.env["LOVABLE_API_KEY"];
+  if (!apiKey) throw new GatewayError(401, "Missing LOVABLE_API_KEY");
+
+  const res = await fetch(GATEWAY_URL, {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+      "Lovable-API-Key": apiKey,
+      "X-Lovable-AIG-SDK": "fetch",
+      ...(runId ? { "X-Lovable-AIG-Run-ID": runId } : {}),
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      instructions: system,
+      input,
+      stream: true,
+      reasoning: { effort: "low", summary: "auto" },
+      text: {
+        format: {
+          type: "json_schema",
+          name: schemaName,
+          strict: true,
+          schema,
+        },
+      },
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new GatewayError(res.status || 500, detail || "AI gateway request failed");
+  }
+
+  // Streamed SSE — accumulate output text deltas (buffered calls time out).
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let out = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const evt = JSON.parse(payload) as {
+          type?: string;
+          delta?: string;
+          response?: { output_text?: string };
+        };
+        if (evt.type === "response.output_text.delta" && typeof evt.delta === "string") {
+          out += evt.delta;
+        } else if (evt.type === "response.completed" && !out && evt.response?.output_text) {
+          out = evt.response.output_text;
+        }
+      } catch {
+        // ignore keep-alive / non-JSON frames
+      }
+    }
+  }
+
+  const trimmed = out.trim();
+  if (!trimmed) throw new GatewayError(502, "AI returned an empty response");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1));
+    throw new GatewayError(502, "AI returned malformed JSON");
+  }
+}
+
+export async function createPlan(args: {
+  command: string;
+  allowedApps?: string[];
+  device?: string | null;
+  screen?: ScreenSnapshot | null;
+  runId?: string | null;
+  signal?: AbortSignal;
+}): Promise<AgentPlan> {
+  const parts = [`أمر المستخدم: ${args.command}`];
+  if (args.allowedApps?.length) {
+    parts.push(`التطبيقات المسموح بالتحكم بها: ${args.allowedApps.join(", ")}`);
+  }
+  if (args.device) parts.push(`الجهاز: ${args.device}`);
+  if (args.screen) {
+    parts.push(`حالة الشاشة الحالية (json): ${JSON.stringify(args.screen).slice(0, 12000)}`);
+  }
+  parts.push("أعد خطة json مطابقة للمخطط المطلوب.");
+
+  const plan = (await callGateway({
+    system: PLANNER_SYSTEM_PROMPT,
+    input: parts.join("\n"),
+    schemaName: "agent_plan",
+    schema: PLAN_JSON_SCHEMA,
+    runId: args.runId,
+    signal: args.signal,
+  })) as AgentPlan;
+
+  plan.steps = (plan.steps ?? []).map((s, i) => ({ ...s, id: s.id ?? i + 1 }));
+  return plan;
+}
+
+export async function decideNextStep(args: {
+  goal: string;
+  plannedStep?: unknown;
+  screen: ScreenSnapshot;
+  history?: string[];
+  runId?: string | null;
+  signal?: AbortSignal;
+}): Promise<DecideResult> {
+  const input = [
+    `الهدف: ${args.goal}`,
+    args.plannedStep ? `الخطوة المخططة: ${JSON.stringify(args.plannedStep)}` : "",
+    args.history?.length ? `الإجراءات المنفذة سابقاً: ${args.history.slice(-15).join(" | ")}` : "",
+    `لقطة الشاشة (json): ${JSON.stringify(args.screen).slice(0, 14000)}`,
+    "أعد قرار json مطابقاً للمخطط.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return (await callGateway({
+    system: DECIDER_SYSTEM_PROMPT,
+    input,
+    schemaName: "agent_decision",
+    schema: DECIDE_JSON_SCHEMA,
+    runId: args.runId,
+    signal: args.signal,
+  })) as DecideResult;
+}
