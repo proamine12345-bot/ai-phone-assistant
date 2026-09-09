@@ -5,6 +5,7 @@
  * Server-only. Never import from browser code.
  */
 import {
+  ACTIONS,
   DECIDER_SYSTEM_PROMPT,
   DECIDE_JSON_SCHEMA,
   PLANNER_SYSTEM_PROMPT,
@@ -34,7 +35,24 @@ interface CallOptions {
   signal?: AbortSignal | undefined;
 }
 
-async function callGateway({
+/** Retries transient gateway failures (429/5xx) and malformed JSON once. */
+async function callGateway(options: CallOptions): Promise<unknown> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 800));
+    try {
+      return await callGatewayOnce(options);
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        error instanceof GatewayError && (error.status === 429 || error.status >= 500);
+      if (!retryable) throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function callGatewayOnce({
   system,
   input,
   schemaName,
@@ -139,7 +157,7 @@ export async function createPlan(args: {
   }
   parts.push("أعد خطة json مطابقة للمخطط المطلوب.");
 
-  const plan = (await callGateway({
+  const raw = (await callGateway({
     system: PLANNER_SYSTEM_PROMPT,
     input: parts.join("\n"),
     schemaName: "agent_plan",
@@ -148,9 +166,26 @@ export async function createPlan(args: {
     signal: args.signal,
   })) as AgentPlan;
 
-  plan.steps = (plan.steps ?? []).map((s, i) => ({ ...s, id: s.id ?? i + 1 }));
+  return validatePlan(raw);
+}
+
+/** Guards TaskEngine against anything that is not a schema-valid plan. */
+function validatePlan(raw: unknown): AgentPlan {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new GatewayError(502, "AI returned a non-plan payload");
+  }
+  const plan = raw as AgentPlan;
+  const steps = (Array.isArray(plan.steps) ? plan.steps : []).filter(
+    (s) => s && typeof s.action === "string" && (ACTIONS as readonly string[]).includes(s.action),
+  );
+  if (steps.length === 0) throw new GatewayError(502, "AI returned a plan with no valid steps");
+  plan.steps = steps.map((s, i) => ({ ...s, id: typeof s.id === "number" && s.id > 0 ? s.id : i + 1 }));
+  if (typeof plan.goal !== "string") plan.goal = "";
+  if (typeof plan.summary !== "string") plan.summary = "";
+  plan.needsConfirmation = Boolean(plan.needsConfirmation) || plan.steps.some((s) => s.dangerous);
   return plan;
 }
+
 
 export async function decideNextStep(args: {
   goal: string;
@@ -170,7 +205,7 @@ export async function decideNextStep(args: {
     .filter(Boolean)
     .join("\n");
 
-  return (await callGateway({
+  const raw = (await callGateway({
     system: DECIDER_SYSTEM_PROMPT,
     input,
     schemaName: "agent_decision",
@@ -178,4 +213,10 @@ export async function decideNextStep(args: {
     runId: args.runId,
     signal: args.signal,
   })) as DecideResult;
+
+  const step = (raw as DecideResult | null)?.step;
+  if (!step || !(ACTIONS as readonly string[]).includes(step.action)) {
+    throw new GatewayError(502, "AI returned an invalid action");
+  }
+  return raw;
 }
