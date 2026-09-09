@@ -139,7 +139,7 @@ export async function createPlan(args: {
   }
   parts.push("أعد خطة json مطابقة للمخطط المطلوب.");
 
-  const plan = (await callGateway({
+  const raw = (await callGateway({
     system: PLANNER_SYSTEM_PROMPT,
     input: parts.join("\n"),
     schemaName: "agent_plan",
@@ -148,9 +148,26 @@ export async function createPlan(args: {
     signal: args.signal,
   })) as AgentPlan;
 
-  plan.steps = (plan.steps ?? []).map((s, i) => ({ ...s, id: s.id ?? i + 1 }));
+  return validatePlan(raw);
+}
+
+/** Guards TaskEngine against anything that is not a schema-valid plan. */
+function validatePlan(raw: unknown): AgentPlan {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new GatewayError(502, "AI returned a non-plan payload");
+  }
+  const plan = raw as AgentPlan;
+  const steps = (Array.isArray(plan.steps) ? plan.steps : []).filter(
+    (s) => s && typeof s.action === "string" && (ACTIONS as readonly string[]).includes(s.action),
+  );
+  if (steps.length === 0) throw new GatewayError(502, "AI returned a plan with no valid steps");
+  plan.steps = steps.map((s, i) => ({ ...s, id: typeof s.id === "number" && s.id > 0 ? s.id : i + 1 }));
+  if (typeof plan.goal !== "string") plan.goal = "";
+  if (typeof plan.summary !== "string") plan.summary = "";
+  plan.needsConfirmation = Boolean(plan.needsConfirmation) || plan.steps.some((s) => s.dangerous);
   return plan;
 }
+
 
 export async function decideNextStep(args: {
   goal: string;
