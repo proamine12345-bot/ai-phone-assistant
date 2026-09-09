@@ -10,6 +10,7 @@ import com.aiphoneagent.core.PlanRequest
 import com.aiphoneagent.core.PlanResponse
 import com.aiphoneagent.core.ScreenSnapshot
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
