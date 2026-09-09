@@ -44,9 +44,9 @@ export const Route = createFileRoute("/api/public/agent/plan")({
         try {
           const plan = await createPlan({
             command: parsed.data.command,
-            allowedApps: parsed.data.allowedApps,
+            allowedApps: parsed.data.allowedApps ?? [],
             device: parsed.data.device ?? null,
-            screen: parsed.data.screen ?? null,
+            screen: (parsed.data.screen ?? null) as never,
             signal: request.signal,
           });
           return json({ plan });
