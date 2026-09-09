@@ -18,7 +18,7 @@ android {
 
         // Base URL of the AI layer deployed by this Lovable project.
         // Replace with your published URL, e.g. https://project--<id>.lovable.app
-        buildConfigField("String", "AGENT_API_BASE", "\"https://example.lovable.app\"")
+        buildConfigField("String", "AGENT_API_BASE", "\"https://nexos-android-ai.lovable.app\"")
         // Optional shared token; must match the AGENT_API_TOKEN secret on the server.
         buildConfigField("String", "AGENT_API_TOKEN", "\"\"")
     }
