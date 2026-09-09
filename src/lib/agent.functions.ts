@@ -12,7 +12,7 @@ export const planCommand = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => PlanInput.parse(input))
   .handler(async ({ data }): Promise<AgentPlan> => {
     const { createPlan } = await import("./agent-planner.server");
-    return createPlan({ command: data.command, allowedApps: data.allowedApps });
+    return createPlan({ command: data.command, allowedApps: data.allowedApps ?? [] });
   });
 
 const DecideInput = z.object({
@@ -25,5 +25,5 @@ export const decideStep = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => DecideInput.parse(input))
   .handler(async ({ data }): Promise<DecideResult> => {
     const { decideNextStep } = await import("./agent-planner.server");
-    return decideNextStep({ goal: data.goal, screen: data.screen, history: data.history });
+    return decideNextStep({ goal: data.goal, screen: data.screen as never, history: data.history ?? [] });
   });

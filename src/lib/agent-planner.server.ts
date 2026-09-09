@@ -30,8 +30,8 @@ interface CallOptions {
   input: string;
   schemaName: string;
   schema: unknown;
-  runId?: string | null;
-  signal?: AbortSignal;
+  runId?: string | null | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 async function callGateway({
@@ -47,7 +47,7 @@ async function callGateway({
 
   const res = await fetch(GATEWAY_URL, {
     method: "POST",
-    signal,
+    signal: signal ?? null,
     headers: {
       "Content-Type": "application/json",
       "Lovable-API-Key": apiKey,
@@ -126,8 +126,8 @@ export async function createPlan(args: {
   allowedApps?: string[];
   device?: string | null;
   screen?: ScreenSnapshot | null;
-  runId?: string | null;
-  signal?: AbortSignal;
+  runId?: string | null | undefined;
+  signal?: AbortSignal | undefined;
 }): Promise<AgentPlan> {
   const parts = [`أمر المستخدم: ${args.command}`];
   if (args.allowedApps?.length) {
@@ -157,8 +157,8 @@ export async function decideNextStep(args: {
   plannedStep?: unknown;
   screen: ScreenSnapshot;
   history?: string[];
-  runId?: string | null;
-  signal?: AbortSignal;
+  runId?: string | null | undefined;
+  signal?: AbortSignal | undefined;
 }): Promise<DecideResult> {
   const input = [
     `الهدف: ${args.goal}`,
