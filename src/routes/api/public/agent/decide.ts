@@ -64,8 +64,8 @@ export const Route = createFileRoute("/api/public/agent/decide")({
           const decision = await decideNextStep({
             goal: parsed.data.goal,
             plannedStep: parsed.data.plannedStep ?? undefined,
-            screen: parsed.data.screen,
-            history: parsed.data.history,
+            screen: parsed.data.screen as never,
+            history: parsed.data.history ?? [],
             signal: request.signal,
           });
           return json({ decision });

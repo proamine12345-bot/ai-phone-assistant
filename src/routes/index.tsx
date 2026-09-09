@@ -52,7 +52,7 @@ interface ChatMessage {
 interface LogEntry {
   id: number;
   label: string;
-  detail?: string;
+  detail?: string | undefined;
   ok: boolean;
 }
 
