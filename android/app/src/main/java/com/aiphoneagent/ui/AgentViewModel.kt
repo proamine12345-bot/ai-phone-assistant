@@ -84,6 +84,7 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
                     402 -> "انتهى رصيد الذكاء الاصطناعي. أضف رصيداً للمتابعة."
                     403 -> "الوصول إلى الذكاء الاصطناعي محجوب لهذه المساحة."
                     429 -> "الطلبات كثيرة، أعد المحاولة بعد قليل."
+                    PlannerClient.NOT_JSON -> e.message ?: "استجابة غير صالحة من طبقة الذكاء"
                     else -> "تعذّر إنشاء الخطة: ${e.message}"
                 }
                 AgentBus.say(message)
