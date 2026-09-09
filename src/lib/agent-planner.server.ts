@@ -35,7 +35,24 @@ interface CallOptions {
   signal?: AbortSignal | undefined;
 }
 
-async function callGateway({
+/** Retries transient gateway failures (429/5xx) and malformed JSON once. */
+async function callGateway(options: CallOptions): Promise<unknown> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 800));
+    try {
+      return await callGatewayOnce(options);
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        error instanceof GatewayError && (error.status === 429 || error.status >= 500);
+      if (!retryable) throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function callGatewayOnce({
   system,
   input,
   schemaName,
