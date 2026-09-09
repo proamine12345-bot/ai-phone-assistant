@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">وكيل الهاتف الذكي</string>
+    <string name="accessibility_label">AI Phone Agent</string>
+    <string name="accessibility_description">يسمح للوكيل بقراءة عناصر الشاشة وتنفيذ اللمس والتمرير والكتابة داخل التطبيقات التي توافق عليها فقط. يمكنك إيقافه في أي لحظة.</string>
+</resources>

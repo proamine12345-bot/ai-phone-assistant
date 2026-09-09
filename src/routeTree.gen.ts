@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicAgentDecideRouteImport } from './routes/api/public/agent/decide'
+import { Route as ApiPublicAgentPlanRouteImport } from './routes/api/public/agent/plan'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAgentDecideRoute = ApiPublicAgentDecideRouteImport.update({
+  id: '/api/public/agent/decide',
+  path: '/api/public/agent/decide',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicAgentPlanRoute = ApiPublicAgentPlanRouteImport.update({
+  id: '/api/public/agent/plan',
+  path: '/api/public/agent/plan',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/agent/decide': typeof ApiPublicAgentDecideRoute
+  '/api/public/agent/plan': typeof ApiPublicAgentPlanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/agent/decide': typeof ApiPublicAgentDecideRoute
+  '/api/public/agent/plan': typeof ApiPublicAgentPlanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/agent/decide': typeof ApiPublicAgentDecideRoute
+  '/api/public/agent/plan': typeof ApiPublicAgentPlanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/public/agent/decide' | '/api/public/agent/plan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/public/agent/decide' | '/api/public/agent/plan'
+  id: '__root__' | '/' | '/api/public/agent/decide' | '/api/public/agent/plan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicAgentDecideRoute: typeof ApiPublicAgentDecideRoute
+  ApiPublicAgentPlanRoute: typeof ApiPublicAgentPlanRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/agent/decide': {
+      id: '/api/public/agent/decide'
+      path: '/api/public/agent/decide'
+      fullPath: '/api/public/agent/decide'
+      preLoaderRoute: typeof ApiPublicAgentDecideRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/agent/plan': {
+      id: '/api/public/agent/plan'
+      path: '/api/public/agent/plan'
+      fullPath: '/api/public/agent/plan'
+      preLoaderRoute: typeof ApiPublicAgentPlanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicAgentDecideRoute: ApiPublicAgentDecideRoute,
+  ApiPublicAgentPlanRoute: ApiPublicAgentPlanRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
