@@ -188,7 +188,7 @@ export async function decideNextStep(args: {
     .filter(Boolean)
     .join("\n");
 
-  return (await callGateway({
+  const raw = (await callGateway({
     system: DECIDER_SYSTEM_PROMPT,
     input,
     schemaName: "agent_decision",
@@ -196,4 +196,10 @@ export async function decideNextStep(args: {
     runId: args.runId,
     signal: args.signal,
   })) as DecideResult;
+
+  const step = (raw as DecideResult | null)?.step;
+  if (!step || !(ACTIONS as readonly string[]).includes(step.action)) {
+    throw new GatewayError(502, "AI returned an invalid action");
+  }
+  return raw;
 }
